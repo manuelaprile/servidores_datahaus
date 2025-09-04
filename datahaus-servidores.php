@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Landing Servidores
- * Description: Plugin para la nueva landing de servidores de Datahaus
+ * Description: Plugin para generar la nueva landing de servidores de Datahaus
  * Version: 1.0.0
  * Author: Tupaca
  */
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 
 define('DATAHAUS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-class Datahaus_Servidores_Landing {
+class Datahaus_Servidores {
     
     private $carousel_instances = [];
     
@@ -39,12 +39,11 @@ class Datahaus_Servidores_Landing {
     }
     
     public function render_shortcode($atts) {
-        $atts = shortcode_atts(['categoria' => '', 'posts_per_slide' => -1], $atts);
+        $atts = shortcode_atts(['posts_per_slide' => -1], $atts);
         
         $categorias = get_terms([
             'taxonomy' => 'categoria',
             'hide_empty' => true,
-            'slug' => $atts['categoria'] ? $atts['categoria'] : ''
         ]);
         
         if (empty($categorias)) {
@@ -182,4 +181,4 @@ public function ajax_get_specs() {
     }
 }
 
-new Datahaus_Servidores_Landing();
+new Datahaus_Servidores();

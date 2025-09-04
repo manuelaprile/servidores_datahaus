@@ -41,11 +41,9 @@ function createSwiper(element, carouselId) {
             1024: { slidesPerView: 3, spaceBetween: 20 },
             1200: { slidesPerView: 3, spaceBetween: 25 }
         },
-
         speed: 400,
         effect: 'slide',
         autoHeight: false,
-
     });
 
     element.swiperInstance = swiper;
@@ -121,11 +119,8 @@ function renderDetailView(data) {
     let html = '';
     
     Object.keys(data.specs).forEach(specKey => {
-        const spec = data.specs[specKey];
-        
-        console.log(`=== SPEC: ${specKey} ===`);
-        console.log('Spec completo:', spec);
-        
+        const spec = data.specs[specKey];    
+    
         html += `<div class="datahaus-spec-accordion">
             <div class="datahaus-spec-header" data-spec="${specKey}">
                 <span>${spec.label}</span>
