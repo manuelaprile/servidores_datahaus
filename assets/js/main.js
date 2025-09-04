@@ -1,57 +1,51 @@
-let selectedSpecs = {};
-let swiperInstances = {};
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.querySelector('[data-init-carousels]');
+    if (container) {
+        initDatahausServidores();
+    }
+});
 
-function initDatahausServidores(carouselIds) {
+let selectedSpecs = {};
+
+function initDatahausServidores() {
     if (typeof Swiper === 'undefined') {
         console.warn('Swiper no está disponible');
         return;
     }
 
-    initCarousels(carouselIds);
+    initCarousels();
     bindEvents();
 }
 
-// Carousels
-function initCarousels(carouselIds) {
-    carouselIds.forEach(carouselId => {
-        const selector = `.datahaus-servidor-carousel[data-carousel="${carouselId}"]`;
-        const carouselElement = jQuery(selector)[0];
-
-        if (carouselElement) {
-            createSwiper(carouselElement, carouselId);
-        }
+function initCarousels() {
+    const carousels = document.querySelectorAll('.datahaus-servidor-carousel');
+    
+    carousels.forEach(carousel => {
+        new Swiper(carousel, {
+            slidesPerView: 1,
+            spaceBetween: 20,
+            loop: false,
+            navigation: {
+                nextEl: carousel.querySelector('.swiper-button-next'),
+                prevEl: carousel.querySelector('.swiper-button-prev')
+            },
+            breakpoints: {
+                480: { slidesPerView: 1, spaceBetween: 15 },
+                640: { slidesPerView: 2, spaceBetween: 20 },
+                768: { slidesPerView: 3, spaceBetween: 20 },
+                1024: { slidesPerView: 3, spaceBetween: 20 },
+                1200: { slidesPerView: 3, spaceBetween: 25 }
+            },
+            speed: 400,
+            effect: 'slide',
+            autoHeight: false,
+        });
     });
 }
 
-function createSwiper(element, carouselId) {
-    const swiper = new Swiper(element, {
-        slidesPerView: 1,
-        spaceBetween: 20,
-        loop: false,
-
-        navigation: {
-            nextEl: element.querySelector('.swiper-button-next'),
-            prevEl: element.querySelector('.swiper-button-prev')
-        },
-
-        breakpoints: {
-            480: { slidesPerView: 1, spaceBetween: 15 },
-            640: { slidesPerView: 2, spaceBetween: 20 },
-            768: { slidesPerView: 3, spaceBetween: 20 },
-            1024: { slidesPerView: 3, spaceBetween: 20 },
-            1200: { slidesPerView: 3, spaceBetween: 25 }
-        },
-        speed: 400,
-        effect: 'slide',
-        autoHeight: false,
-    });
-
-    element.swiperInstance = swiper;
-    swiperInstances[carouselId] = swiper;
-    return swiper;
-}
-
-// Event listeners
+// ============================================================================
+// EVENTS
+// ============================================================================
 function bindEvents() {
     jQuery(document).on('click', '.datahaus-servidor-ver-mas', function(e) {
         e.preventDefault();
@@ -76,7 +70,9 @@ function bindEvents() {
     });
 }
 
-// Vista de detalle
+// ============================================================================
+// DETAIL VIEW
+// ============================================================================
 function showDetailView(servidorId) {
     jQuery('.datahaus-servidores-carousels').hide();
     jQuery('#datahaus-detail-view').show();
@@ -116,11 +112,15 @@ function renderDetailView(data) {
     jQuery('#datahaus-detail-description').text(data.descripcion);
     jQuery('#datahaus-specs-loading').hide();
 
+    const specsHtml = buildSpecsHtml(data.specs);
+    jQuery('#datahaus-specs-content').html(specsHtml).show();
+    selectedSpecs = {};
+}
+
+function buildSpecsHtml(specs) {
     let html = '';
     
-    Object.keys(data.specs).forEach(specKey => {
-        const spec = data.specs[specKey];    
-    
+    Object.entries(specs).forEach(([specKey, spec]) => {
         html += `<div class="datahaus-spec-accordion">
             <div class="datahaus-spec-header" data-spec="${specKey}">
                 <span>${spec.label}</span>
@@ -129,41 +129,52 @@ function renderDetailView(data) {
             <div class="datahaus-spec-content">`;
         
         spec.options.forEach((option, index) => {
-            
-            const inputId = `${specKey}_${index}`;
-            
-            html += '<div class="datahaus-spec-option">';            
-            const modelo = option[`${specKey}_modelo`] || '';
-            const sku = option[`${specKey}_sku`] || '';
-            
-            let labelText = '';
-            if (modelo) {
-                labelText += `${modelo}`;
-            }
-            if (sku) {
-                labelText += ` [${sku}]`;
-            }
-                        
-            if (spec.type === 'quantity') {
-                html += `<input type="number" name="${inputId}_qty" id="${inputId}_qty" value="0" min="0" max="99" class="datahaus-qty-input">
-                         <label for="${inputId}_qty">x ${labelText}</label>`;
-            } else {
-                const inputName = spec.type === 'radio' ? specKey : `${specKey}[]`;
-                html += `<input type="${spec.type}" name="${inputName}" id="${inputId}" value="${index}">
-                         <label for="${inputId}">${labelText}</label>`;
-            }
-            
-            html += '</div>';
+            html += buildSpecOption(specKey, spec, option, index);
         });
         
         html += '</div></div>';
     });
 
-    jQuery('#datahaus-specs-content').html(html).show();
-    selectedSpecs = {};
+    return html;
 }
 
-// Accordion
+function buildSpecOption(specKey, spec, option, index) {
+    const inputId = `${specKey}_${index}`;
+    const labelText = buildOptionLabel(option, specKey);
+    
+    let optionHtml = '<div class="datahaus-spec-option">';
+    
+    if (spec.type === 'quantity') {
+        optionHtml += `
+            <input type="number" name="${inputId}_qty" id="${inputId}_qty" 
+                   value="0" min="0" max="99" class="datahaus-qty-input">
+            <label for="${inputId}_qty">x ${labelText}</label>`;
+    } else {
+        const inputName = spec.type === 'radio' ? specKey : `${specKey}[]`;
+        optionHtml += `
+            <input type="${spec.type}" name="${inputName}" id="${inputId}" value="${index}">
+            <label for="${inputId}">${labelText}</label>`;
+    }
+    
+    optionHtml += '</div>';
+    return optionHtml;
+}
+
+function buildOptionLabel(option, specKey) {
+    const modelo = option[`${specKey}_modelo`] || '';
+    const sku = option[`${specKey}_sku`] || '';
+    
+    let labelText = modelo;
+    if (sku) {
+        labelText += ` [${sku}]`;
+    }
+    
+    return labelText;
+}
+
+// ============================================================================
+// ACCORDION
+// ============================================================================
 function toggleAccordion($header) {
     const $content = $header.next('.datahaus-spec-content');
     
@@ -174,40 +185,38 @@ function toggleAccordion($header) {
     $header.find('span:last').text(icon);
 }
 
-// Selección de especificaciones
 function updateSelectedSpecs() {
     selectedSpecs = {};
     
-    // Radio buttons y checkboxes
     jQuery('.datahaus-spec-option input:checked').each(function() {
-        const $input = jQuery(this);
-        const specType = $input.closest('.datahaus-spec-accordion').find('.datahaus-spec-header').data('spec');
-        const label = $input.next('label').text();
-        
-        if (!selectedSpecs[specType]) {
-            selectedSpecs[specType] = [];
-        }
-        selectedSpecs[specType].push(label);
+        addSpecToSelection(jQuery(this), 'checked');
     });
     
-    // Campos de cantidad
     jQuery('.datahaus-spec-option input[type="number"]').each(function() {
-        const $input = jQuery(this);
-        const qty = parseInt($input.val()) || 0;
-        
+        const qty = parseInt(jQuery(this).val()) || 0;
         if (qty > 0) {
-            const specType = $input.closest('.datahaus-spec-accordion').find('.datahaus-spec-header').data('spec');
-            const label = $input.next('label').text();
-            
-            if (!selectedSpecs[specType]) {
-                selectedSpecs[specType] = [];
-            }
-            selectedSpecs[specType].push(`${qty} ${label}`);
+            addSpecToSelection(jQuery(this), 'quantity', qty);
         }
     });
 }
 
-// WhatsApp
+function addSpecToSelection($input, type, qty = null) {
+    const specType = $input.closest('.datahaus-spec-accordion')
+                          .find('.datahaus-spec-header')
+                          .data('spec');
+    const label = $input.next('label').text();
+    
+    if (!selectedSpecs[specType]) {
+        selectedSpecs[specType] = [];
+    }
+    
+    const finalLabel = type === 'quantity' ? `${qty} ${label}` : label;
+    selectedSpecs[specType].push(finalLabel);
+}
+
+// ============================================================================
+// WHATSAPP
+// ============================================================================
 function sendToWhatsApp() {
     updateSelectedSpecs();
     
@@ -215,10 +224,9 @@ function sendToWhatsApp() {
     let message = `Hola! Me interesa el servidor: ${serverName}\n\n`;
     message += 'Configuración seleccionada:\n';
     
-    Object.keys(selectedSpecs).forEach(specType => {
+    Object.entries(selectedSpecs).forEach(([specType, specs]) => {
         const specLabel = jQuery(`[data-spec="${specType}"]`).text();
-        const specs = selectedSpecs[specType].join(', ');
-        message += `• ${specLabel}: ${specs}\n`;
+        message += `• ${specLabel}: ${specs.join(', ')}\n`;
     });
     
     message += '\n¿Podrían enviarme más información?';
@@ -226,26 +234,3 @@ function sendToWhatsApp() {
     const whatsappUrl = `https://wa.me/${datahaus_ajax.whatsapp_number}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
 }
-
-function destroyCarousel(carouselId) {
-    const element = jQuery(`.datahaus-servidor-carousel[data-carousel="${carouselId}"]`)[0];
-    
-    if (element && element.swiperInstance) {
-        element.swiperInstance.destroy(true, true);
-        element.swiperInstance = null;
-        delete swiperInstances[carouselId];
-    }
-}
-
-function updateCarousel(carouselId) {
-    if (swiperInstances[carouselId]) {
-        swiperInstances[carouselId].update();
-    }
-}
-
-// Objeto global para compatibilidad
-window.DatahausServidores = {
-    init: initDatahausServidores,
-    destroy: destroyCarousel,
-    update: updateCarousel
-};

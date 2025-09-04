@@ -14,12 +14,9 @@ define('DATAHAUS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 class Datahaus_Servidores {
     
-    private $carousel_instances = [];
-    
     public function __construct() {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
         add_shortcode('datahaus_landing', [$this, 'render_shortcode']);
-        add_action('wp_footer', [$this, 'render_scripts']);
         add_action('wp_ajax_datahaus_get_servidor_specs', [$this, 'ajax_get_specs']);
         add_action('wp_ajax_nopriv_datahaus_get_servidor_specs', [$this, 'ajax_get_specs']);
     }
@@ -51,6 +48,7 @@ class Datahaus_Servidores {
         }
         
         ob_start();
+        echo '<div class="datahaus-servidores-container" data-init-carousels>';
         echo '<div class="datahaus-servidores-carousels">';
         
         foreach ($categorias as $categoria) {
@@ -59,6 +57,7 @@ class Datahaus_Servidores {
         
         echo '</div>';
         $this->render_detail_view();
+        echo '</div>';
         
         return ob_get_clean();
     }
@@ -76,11 +75,9 @@ class Datahaus_Servidores {
         
         if (!$servidores->have_posts()) return;
         
-        $this->carousel_instances[] = $categoria->slug;
-        
         echo '<div class="datahaus-categoria-section">';
         echo '<h3 class="datahaus-categoria-title">' . esc_html($categoria->name) . '</h3>';
-        echo '<div class="swiper datahaus-servidor-carousel" data-carousel="' . $categoria->slug . '">';
+        echo '<div class="swiper datahaus-servidor-carousel">';
         echo '<div class="swiper-wrapper">';
         
         while ($servidores->have_posts()) {
@@ -132,52 +129,39 @@ class Datahaus_Servidores {
         <?php
     }
     
-public function ajax_get_specs() {
-    check_ajax_referer('datahaus_specs_nonce', 'nonce');
-    
-    $servidor_id = intval($_POST['servidor_id']);
-    if (!$servidor_id) wp_die('ID inválido');
-    
-    $response = [
-        'titulo' => get_the_title($servidor_id),
-        'imagen' => get_the_post_thumbnail_url($servidor_id, 'large'),
-        'descripcion' => get_the_excerpt($servidor_id),
-        'specs' => []
-    ];
-    
-    //La nomenclatura es la siguiente nombre del campo en ACF -> Label -> Tipo de campo
-    $spec_config = [
-        'chasis' => ['label' => 'Chasis', 'type' => 'radio'],
-        'procesador' => ['label' => 'Procesadores', 'type' => 'radio'],
-        'memoria_ram' => ['label' => 'Memorias RAM', 'type' => 'quantity'],
-        'disco_ssd' => ['label' => 'Discos SSD', 'type' => 'quantity']
-    ];
-    
-    foreach ($spec_config as $field_name => $config) {
-        $field_data = get_field($field_name, $servidor_id);
-                
-        if ($field_data && is_array($field_data)) {
-            $response['specs'][$field_name] = [
-                'label' => $config['label'],
-                'options' => $field_data,
-                'type' => $config['type']
-            ];
+    public function ajax_get_specs() {
+        check_ajax_referer('datahaus_specs_nonce', 'nonce');
+        
+        $servidor_id = intval($_POST['servidor_id']);
+        if (!$servidor_id) wp_die('ID inválido');
+        
+        $response = [
+            'titulo' => get_the_title($servidor_id),
+            'imagen' => get_the_post_thumbnail_url($servidor_id, 'large'),
+            'descripcion' => get_the_excerpt($servidor_id),
+            'specs' => []
+        ];
+        //Nomenclatura nombre de campo de ACF -> Label (texto) -> Tipo de campo
+        $spec_config = [
+            'chasis' => ['label' => 'Chasis', 'type' => 'radio'],
+            'procesador' => ['label' => 'Procesadores', 'type' => 'radio'],
+            'memoria_ram' => ['label' => 'Memorias RAM', 'type' => 'quantity'],
+            'disco_ssd' => ['label' => 'Discos SSD', 'type' => 'quantity']
+        ];
+        
+        foreach ($spec_config as $field_name => $config) {
+            $field_data = get_field($field_name, $servidor_id);
+                    
+            if ($field_data && is_array($field_data)) {
+                $response['specs'][$field_name] = [
+                    'label' => $config['label'],
+                    'options' => $field_data,
+                    'type' => $config['type']
+                ];
+            }
         }
-    }
-    
-    wp_send_json_success($response);
-}
-    
-    public function render_scripts() {
-        if (!empty($this->carousel_instances)) {
-            echo '<script>
-                document.addEventListener("DOMContentLoaded", function() {
-                    if (typeof DatahausServidores !== "undefined") {
-                        DatahausServidores.init(' . json_encode($this->carousel_instances) . ');
-                    }
-                });
-            </script>';
-        }
+        
+        wp_send_json_success($response);
     }
 }
 
