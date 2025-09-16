@@ -12,98 +12,109 @@ if (!defined('ABSPATH')) {
 
 define('DATAHAUS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-class Datahaus_Servidores {
-    
-    public function __construct() {
+class Datahaus_Servidores
+{
+
+    public function __construct()
+    {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
         add_shortcode('datahaus_landing', [$this, 'render_shortcode']);
         add_action('wp_ajax_datahaus_get_servidor_specs', [$this, 'ajax_get_specs']);
         add_action('wp_ajax_nopriv_datahaus_get_servidor_specs', [$this, 'ajax_get_specs']);
+        add_filter('acf/fields/relationship/query/name=servidores_relacionados_custom', [$this, 'excluir_servidor_actual_relacionados'], 10, 3);
+        add_action('acf/init', [$this, 'crear_campo_servidores_relacionados']);
     }
-    
-    public function enqueue_assets() {
+
+    public function enqueue_assets()
+    {
         wp_enqueue_style('datahaus-swiper', 'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css');
         wp_enqueue_script('datahaus-swiper-js', 'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js', [], null, true);
-        
-        wp_enqueue_style('datahaus-styles', DATAHAUS_PLUGIN_URL . 'assets/css/styles.css', [], '1.0.0');
+
+        wp_enqueue_style('datahaus-styles', DATAHAUS_PLUGIN_URL . 'assets/css/styles.css', ['datahaus-swiper'], '1.0.0');
         wp_enqueue_script('datahaus-main', DATAHAUS_PLUGIN_URL . 'assets/js/main.js', ['datahaus-swiper-js', 'jquery'], '1.0.0', true);
-        
+
         wp_localize_script('datahaus-main', 'datahaus_ajax', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('datahaus_specs_nonce'),
-            'whatsapp_number' => get_option('datahaus_whatsapp_number', '5491112345678')
+            'whatsapp_number' => get_option('datahaus_whatsapp_number', '5491169262737')
         ]);
     }
-    
-    public function render_shortcode($atts) {
+
+    public function render_shortcode($atts)
+    {
         $atts = shortcode_atts(['posts_per_slide' => -1], $atts);
-        
+
         $categorias = get_terms([
             'taxonomy' => 'categoria',
             'hide_empty' => true,
         ]);
-        
+
         if (empty($categorias)) {
             return '<p>No se encontraron categorías.</p>';
         }
-        
+
         ob_start();
         echo '<div class="datahaus-servidores-container" data-init-carousels>';
         echo '<div class="datahaus-servidores-carousels">';
-        
+
         foreach ($categorias as $categoria) {
             $this->render_categoria($categoria, $atts['posts_per_slide']);
         }
-        
+
         echo '</div>';
         $this->render_detail_view();
         echo '</div>';
-        
+
         return ob_get_clean();
     }
-    
-    private function render_categoria($categoria, $posts_per_page) {
+
+    private function render_categoria($categoria, $posts_per_page)
+    {
         $servidores = new WP_Query([
             'post_type' => 'servidor',
             'posts_per_page' => $posts_per_page,
-            'tax_query' => [[
-                'taxonomy' => 'categoria',
-                'field' => 'term_id',
-                'terms' => $categoria->term_id,
-            ]],
+            'tax_query' => [
+                [
+                    'taxonomy' => 'categoria',
+                    'field' => 'term_id',
+                    'terms' => $categoria->term_id,
+                ]
+            ],
         ]);
-        
-        if (!$servidores->have_posts()) return;
-        
+
+        if (!$servidores->have_posts())
+            return;
+
         echo '<div class="datahaus-categoria-section">';
         echo '<h3 class="datahaus-categoria-title">' . esc_html($categoria->name) . '</h3>';
         echo '<div class="swiper datahaus-servidor-carousel">';
         echo '<div class="swiper-wrapper">';
-        
+
         while ($servidores->have_posts()) {
             $servidores->the_post();
             echo '<div class="swiper-slide datahaus-servidor-item">';
             echo '<div class="datahaus-servidor-content">';
-            
+
             if (has_post_thumbnail()) {
                 echo '<div class="datahaus-servidor-image">' . get_the_post_thumbnail(get_the_ID(), 'medium') . '</div>';
             }
-            
+
             echo '<h4 class="datahaus-servidor-title">' . get_the_title() . '</h4>';
             echo '<button class="datahaus-servidor-ver-mas" data-servidor-id="' . get_the_ID() . '">Ver más</button>';
             echo '</div></div>';
         }
-        
+
         echo '</div>';
         echo '<div class="swiper-pagination"></div>';
         echo '<div class="swiper-button-next"></div>';
         echo '<div class="swiper-button-prev"></div>';
         echo '</div></div>';
-        
+
         wp_reset_postdata();
     }
-    
-    private function render_detail_view() {
+
+    private function render_detail_view()
+    {
         ?>
         <div id="datahaus-detail-view" class="datahaus-detail-view" style="display: none;">
             <div class="datahaus-detail-banner">
@@ -125,33 +136,51 @@ class Datahaus_Servidores {
                     <button id="datahaus-cotizar-btn" class="datahaus-cotizar-btn">Cotizar ahora</button>
                 </div>
             </div>
+
+            <div id="datahaus-relacionados-container" class="datahaus-servidores-relacionados" style="display: none;">
+                <h3 class="datahaus-relacionados-title">Servidores relacionados</h3>
+                <div class="swiper datahaus-relacionados-carousel" id="relacionados-detail-slider">
+                    <div class="swiper-wrapper"></div>
+                    <div class="swiper-pagination"></div>
+                    <div class="swiper-button-next"></div>
+                    <div class="swiper-button-prev"></div>
+                </div>
+            </div>
         </div>
         <?php
     }
-    
-    public function ajax_get_specs() {
+
+    public function ajax_get_specs()
+    {
         check_ajax_referer('datahaus_specs_nonce', 'nonce');
-        
+
         $servidor_id = intval($_POST['servidor_id']);
-        if (!$servidor_id) wp_die('ID inválido');
-        
+        if (!$servidor_id)
+            wp_die('ID inválido');
+
         $response = [
             'titulo' => get_the_title($servidor_id),
             'imagen' => get_the_post_thumbnail_url($servidor_id, 'large'),
             'descripcion' => get_the_excerpt($servidor_id),
-            'specs' => []
+            'specs' => [],
+            'relacionados' => []
         ];
-        //Nomenclatura nombre de campo de ACF -> Label (texto) -> Tipo de campo
+
+        // Specs existentes
         $spec_config = [
             'chasis' => ['label' => 'Chasis', 'type' => 'radio'],
             'procesador' => ['label' => 'Procesadores', 'type' => 'radio'],
             'memoria_ram' => ['label' => 'Memorias RAM', 'type' => 'quantity'],
-            'disco_ssd' => ['label' => 'Discos SSD', 'type' => 'quantity']
+            'disco_ssd' => ['label' => 'Discos SSD', 'type' => 'quantity'],
+            'disco_mecanico' => ['label' => 'Discos mecánicos', 'type' => 'quantity'],
+            'disco_nvme' => ['label' => 'Discos NVMe', 'type' => 'quantity'],
+            'conectividad' => ['label' => 'Conectividad', 'type' => 'quantity'],
+            'sistema_operativo' => ['label' => 'Sistema Operativo', 'type' => 'quantity']
         ];
-        
+
         foreach ($spec_config as $field_name => $config) {
             $field_data = get_field($field_name, $servidor_id);
-                    
+
             if ($field_data && is_array($field_data)) {
                 $response['specs'][$field_name] = [
                     'label' => $config['label'],
@@ -160,9 +189,94 @@ class Datahaus_Servidores {
                 ];
             }
         }
-        
+
+        // Obtener servidores relacionados
+        $servidores_relacionados = get_field('servidores_relacionados_custom', $servidor_id);
+
+        if ($servidores_relacionados && is_array($servidores_relacionados) && !empty($servidores_relacionados)) {
+            $args = array(
+                'post_type' => 'servidor',
+                'post__in' => $servidores_relacionados,
+                'orderby' => 'post__in',
+                'posts_per_page' => -1,
+                'post_status' => 'publish'
+            );
+
+            $query = new WP_Query($args);
+
+            if ($query->have_posts()) {
+                while ($query->have_posts()) {
+                    $query->the_post();
+                    $rel_servidor_id = get_the_ID();
+                    $categorias = get_the_terms($rel_servidor_id, 'categoria');
+                    $category_name = '';
+                    if ($categorias && !is_wp_error($categorias)) {
+                        $category_name = $categorias[0]->name;
+                    }
+
+                    $response['relacionados'][] = [
+                        'id' => $rel_servidor_id,
+                        'titulo' => get_the_title(),
+                        'imagen' => get_the_post_thumbnail_url($rel_servidor_id, 'medium'),
+                        'categoria' => $category_name,
+                        'excerpt' => wp_trim_words(get_the_excerpt(), 15)
+                    ];
+                }
+                wp_reset_postdata();
+            }
+        }
+
         wp_send_json_success($response);
     }
+
+    function crear_campo_servidores_relacionados()
+    {
+        if (function_exists('acf_add_local_field_group')):
+            acf_add_local_field_group(array(
+                'key' => 'group_servidores_relacionados',
+                'title' => 'Servidores Relacionados',
+                'fields' => array(
+                    array(
+                        'key' => 'field_servidores_relacionados',
+                        'label' => 'Seleccionar Servidores Relacionados',
+                        'name' => 'servidores_relacionados_custom',
+                        'type' => 'relationship',
+                        'required' => 0,
+                        'conditional_logic' => 0,
+                        'post_type' => array('servidor'),
+                        'taxonomy' => '',
+                        'filters' => array('search'),
+                        'elements' => array('featured_image'),
+                        'min' => 0,
+                        'max' => 12,
+                        'return_format' => 'id',
+                    )
+                ),
+                'location' => array(
+                    array(
+                        array(
+                            'param' => 'post_type',
+                            'operator' => '==',
+                            'value' => 'servidor',
+                        ),
+                    ),
+                ),
+            ));
+        endif;
+    }
+
+    /**
+     * Excluir el servidor actual de la lista de relacionados
+     */
+    public function excluir_servidor_actual_relacionados($args, $field, $post_id)
+    {
+        if ($field['name'] == 'servidores_relacionados_custom') {
+            $args['post__not_in'] = array($post_id);
+        }
+        return $args;
+    }
+
+
 }
 
 new Datahaus_Servidores();
